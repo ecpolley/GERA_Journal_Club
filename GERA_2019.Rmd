@@ -1,0 +1,252 @@
+---
+title: "GERA Journal Club: Evaluating classification accuracy for modern learning approaches"
+author: "Eric Polley"
+date: "2/13/2019"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Article
+
+- Li J, Gao M, D'Agostino R (2019) Evaluating classification accuracy for modern machine learning approaches. Statistics in Medicine; 1:1-27.
+
+- Primary goal is to demonstate a framework for evaluating predictive performance when the outcome has multiple categories, *e.g.* different subtypes of disease.
+
+- Slides and R code at https://github.com/ecpolley/GERA_Journal_Club
+
+## Notation
+
+* Have $n$ paired observations $(x_i, y_i)$, where $x$ is a $p$-dimensional vector of covariates, and $y$ is the class label encoded as an integer, $1, 2, \ldots, M$.
+
+* Define class probabilities as $\rho_m = P(y=m) = E(I(y=m))$
+
+* A predictor is a mapping ($\mathcal{M}$) from the covariate space to an $M$-dimensional vector of probabilities (must be between 0 and 1 and sum up to 1 for all possible values of $x$)
+
+## Shallow learning - multinomial logistic regression
+
+Using the first category as the reference:
+$$
+\log \frac{P(y_i = m | x_i)}{P(y_i = 1 | x_i)} = \beta_{m0} + \beta_{m1}^Tx_i, m = 2, \ldots, M
+$$
+Available in `R` with the `multinom` function from the `nnet` package. 
+
+## Support vector machines
+
+Multiple implementations in `R`, most common is the `svm` function from the `e1071` package. Behind the scenes for a multiclass problem, estimates all pairwise binary classifiers and combines the results.
+
+## Decision trees
+
+Multiple implementations in `R`, most common is the `rpart` function from the `rpart` package. Can also be extended with bagging or random forests to create an ensemble of multiple individual classification trees.
+
+## Linear discriminant analysis
+
+For mapping into a probability space, estimates a parametric probability density function in the covariate space conditional on each class level. For example, with estimates of the mean and covariance within each class, can use Bayes Discriminate rule to assign probabilities for a new $x$.
+
+Available in `R` with the `lda` function from `MASS`.
+
+## Not mentioned
+
+* Gradient boosting (`gbm` or `xgBoost`) can be applied to the multiclass problem
+* Regularized regression extensions of the multinomial logisitic regression (`glmnet`)
+* Others?
+
+## Deep learning
+
+- Deep learning can be expressed as an extension of neural networks
+- Network constructed with multiple nested layers of data transformations
+- Data transformations often *activating functions* and are often non-linear and monotonic
+- Functions must be differentiable for parameter estimation (e.g. utilizing back-propagation and gradient descent to find parameter estimates minimizing a loss function)
+
+## Activation Functions
+
+![Activation fuctions](activation_functions.png)
+
+## Loss function
+
+- All algorithms require a loss function to evaluate predictive performance
+- The cross entropy loss common for multiclass problems
+$$
+L(y, y') = -\sum_{m=1}^M y_m \log y'_m
+$$
+where $y'_m$ are the predicted class probabilities.
+- Loss function is computed for each sample, and then usually the average is reported.
+
+## Selection Loss functions
+
+- Should be the metric you would like to minimize
+- The optimal/oracle model should be the minimal expected loss within the model space
+- Theoretically, should be a bounded function. 
+
+## Multilayer perceptron
+
+- Sequential series of activation functions for data transformations
+- End with a softmax function to convert into probability space for the $M$ classes
+
+## Convolutional neural network
+
+- Effective with image data or similar spatially informative data
+- Applies functions over small batches of the full image
+- End with a softmax function
+
+## Algorithm selection
+
+- Recent review of clinical predictors shows no benefit from machine learning algorithms over logistic regression. https://doi.org/10.1016/j.jclinepi.2019.02.004
+
+![jClinEpi_ML_v_LR](jClinEpi_ML_v_LR.png)
+
+## Accuracy metrics
+
+- In the binary classification setting, often use sensitivity, specificity, area under the ROC curve
+- Can be extended to multiple class outcomes
+
+## Hypervolume under the manifold (HUM)
+
+- Extension of binary AUC
+- With $M=3$, can construct a 3D ROC curve
+- With the higher dimensional curve, the area under the curve can be estimated
+- The null value is $1/M!$
+
+## HUM
+
+![3 class ROC curve](HUM.png)
+
+## Correct Classification Probability (CCP)
+
+- Extension of accuracy
+- Requires a threshold for classification
+$$
+CCP = \frac{1}{n}\sum_{i=1}^n I(y_i = y'(\mathcal{M}_1))
+$$
+
+## Polytomous discrimination index
+Another generalization of the AUC is the PDI:
+
+$$
+PDI_i = p(p_{ii}(\mathcal{M}_1 > p_{ji}(\mathcal{M}_1)) | y_i = i)
+$$
+
+## Calibration
+
+- Not specifically mentioned as an evaluation, but should consider calibration of the predicted probabilities in the evaluation of a model
+
+## Case Studies
+
+The authors created an R package (mcca) with the different accuracy metrics included
+```{r, echo = TRUE}
+if(!require(mcca)) install.packages('mcca')
+```
+
+## Guideline
+Step-by-step guide for analysis of classification accuracy:
+
+1) Pre-process raw data, put in tidy data format
+
+2) Split the data into training and test data
+
+3) Estimate the model/classifier, may include internal tuning for algorithm hyper parameters
+
+4) Evaluate classifier on training and test data with pre-selected metrics
+
+## Guideline
+Step-by-step guide for comparison of classification accuracy between two models:
+
+1) Pre-process raw data, put in tidy data format
+
+2) Split the data into training and test data
+
+3) Estimate both models/classifiers, may include internal tuning for algorithm hyper parameters
+
+4) Evaluate classifier on training and test data with pre-selected metrics and the relative comparison
+
+
+## WPBC
+
+```{r, echo = TRUE}
+suppressMessages(library(TH.data))
+data(wpbc)
+## for details on the dataset: ?wpbc
+str(wpbc[, 1:2])
+str(wpbc[, 3:13])
+```
+
+## Leukemia
+
+Authors didn't provide the dataset, but is available in a Bioconductor package (golbuEsets)
+```{r, echo = TRUE}
+suppressMessages(library(golubEsets))
+data(Golub_Train)
+data(Golub_Test)
+
+## create outcome
+Y_Train <- paste0(pData(Golub_Train)$ALL.AML, 
+                  substr(pData(Golub_Train)$T.B.cell, 1, 1))
+Y_Train <- as.factor(Y_Train)
+table(Y_Train)
+
+```
+
+## Leukemia
+
+The authors subset to only 6 probes
+```{r, echo = TRUE}
+# subset genes to match paper
+probes <- c("AFFX-BioB-5_at", "AFFX-BioB-M_at", 
+            "AFFX-BioB-3_at", "AFFX-BioB-5_at", 
+            "AB000114_at", "AC000062_at")
+X_Train <- t(exprs(Golub_Train)[probes, ])
+```
+
+## Leukemia
+
+Estimate a multinomial logisitic regression and evaluate
+```{r, echo = TRUE}
+hum(y = Y_Train, d = X_Train, method = 'multinom', k = 3)
+```
+
+## Side note
+
+The authors subset the variables and then applied the machine learning algorithms and sample split for performance evaluation. This can be a problem if the data is used to select which variables to use for the models.
+
+## Side note
+
+* With $N=100$, and $P=6000$, and binary outcome ($M=2$)
+* Simulated dataset assuming independent multivariate normal for the data generating distribution.
+* Built a classifier with Linear Discriminant Analysis on the subset of genes differentially expressed at $\alpha = 0.001$ level.
+
+## Side note
+
+**Resubstitution method**
+
+* Use all 100 samples to build LDA classifier
+* Evaluate misclassification error rate on the same samples
+
+**Leave one out cross validation (LOOCV) without gene selection**
+
+* Test each gene individually using all 100 samples and identify genes with univariate p-value less than 0.001
+* For $i \in 1, 2, \ldots, 100$:
+  - leave out the $i^{th}$ sample
+  - build LDA classifier on remaining 99 samples with selected genes
+  - evaluate classifier in the $i^{th}$ sample
+* Average the LOOCV misclassification estimates across all folds
+
+## Side note
+
+**Leave one out cross validation (LOOCV) with gene selection**
+
+* For $i \in 1, 2, \ldots, 100$:
+  - leave out the $i^{th}$ sample
+  - Test each gene individually using 99 samples and identify genes with univariate p-value less than 0.001
+  - build LDA classifier on remaining 99 samples with selected genes
+  - evaluate classifier in the $i^{th}$ sample
+* Average the LOOCV misclassification estimates across all folds
+
+## Side note
+
+![Simulation results](CIT_course_fig.png)
+
+## Thanks
+
+- Slides and R code at https://github.com/ecpolley/GERA_Journal_Club
